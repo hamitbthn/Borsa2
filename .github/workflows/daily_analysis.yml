@@ -1,0 +1,30 @@
+name: Daily Stock Analysis Engine
+
+on:
+  schedule:
+    # Her gece TSİ 03:00 (UTC 00:00)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Manuel çalıştırmak istersen buton ekler
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Analysis Engine
+        # Package.json içinde `start:analysis` hedefi olarak `npx tsx src/main.ts` olduğu varsayılarak çağrılır.
+        run: npm run start:analysis
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
