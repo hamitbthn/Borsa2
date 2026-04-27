@@ -1,6 +1,6 @@
 import { db } from '../db/index'; // Drizzle bağlantın
 import { stocks, dailyOhlcv } from '../db/schema'; // Şema tanımların
-import { sql } from 'drizzle-orm';
+import { sql, eq } from 'drizzle-orm';
 import fetch from 'node-fetch'; // Gerekirse polyfill eklenebilir
 
 // Polygon API anahtarı çevre değişkenlerinden alınmalıdır
@@ -27,10 +27,7 @@ export async function fetchAndIngestDailyData(targetDate: string) {
     console.log(`[ETL PIPELINE] Ingestion started for date: ${targetDate}`);
 
     // 1. İşlem yapılacak aktif hisseleri veritabanından çek (Örn: Sadece is_active = true olanlar)
-    let activeStocks = await db.query.stocks.findMany({
-        where: (stocks, { eq }) => eq(stocks.isActive, true),
-        columns: { symbol: true }
-    });
+    let activeStocks = await db.select().from(stocks).where(eq(stocks.isActive, true));
 
     if (activeStocks.length === 0) {
         console.warn("[ETL PIPELINE] Hisseler tablosu BOMBOŞ! Motor durmasın diye otomatik DEV (Mega-Cap) hisseler enjekte ediliyor...");
@@ -42,10 +39,7 @@ export async function fetchAndIngestDailyData(targetDate: string) {
         ];
         await db.insert(stocks).values(defaultStocks).onConflictDoNothing();
 
-        activeStocks = await db.query.stocks.findMany({
-            where: (stocks, { eq }) => eq(stocks.isActive, true),
-            columns: { symbol: true }
-        });
+        activeStocks = await db.select().from(stocks).where(eq(stocks.isActive, true));
     }
 
     let successCount = 0;
