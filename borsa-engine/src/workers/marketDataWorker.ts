@@ -87,7 +87,7 @@ export async function fetchAndIngestDailyData(targetDate: string) {
                 low: r.l.toString(),
                 close: r.c.toString(),
                 adjClose: r.c.toString(), // v2/aggs adjusted=true ise fiyat zaten bölünmüş/düzeltilmiştir
-                volume: r.v
+                volume: Math.round(Number(r.v)) // Polygon kesirli hacim gönderdiğinde BigInt (Postgres) patlamasını önlemek için tam sayıya yuvarlanır
             }));
 
             // 3. Drizzle ORM ile Bulk Atomic UPSERT İşlemi
