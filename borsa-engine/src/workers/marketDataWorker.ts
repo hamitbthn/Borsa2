@@ -27,14 +27,25 @@ export async function fetchAndIngestDailyData(targetDate: string) {
     console.log(`[ETL PIPELINE] Ingestion started for date: ${targetDate}`);
 
     // 1. İşlem yapılacak aktif hisseleri veritabanından çek (Örn: Sadece is_active = true olanlar)
-    const activeStocks = await db.query.stocks.findMany({
+    let activeStocks = await db.query.stocks.findMany({
         where: (stocks, { eq }) => eq(stocks.isActive, true),
         columns: { symbol: true }
     });
 
     if (activeStocks.length === 0) {
-        console.error("[ETL PIPELINE] No active stocks found in the database. Aborting.");
-        return;
+        console.warn("[ETL PIPELINE] Hisseler tablosu BOMBOŞ! Motor durmasın diye otomatik DEV (Mega-Cap) hisseler enjekte ediliyor...");
+        const defaultStocks = [
+            { symbol: 'AAPL', companyName: 'Apple Inc.', sector: 'Technology' },
+            { symbol: 'MSFT', companyName: 'Microsoft Corporation', sector: 'Technology' },
+            { symbol: 'TSLA', companyName: 'Tesla Inc.', sector: 'Automotive' },
+            { symbol: 'NVDA', companyName: 'NVIDIA Corporation', sector: 'Semiconductors' }
+        ];
+        await db.insert(stocks).values(defaultStocks).onConflictDoNothing();
+
+        activeStocks = await db.query.stocks.findMany({
+            where: (stocks, { eq }) => eq(stocks.isActive, true),
+            columns: { symbol: true }
+        });
     }
 
     let successCount = 0;
