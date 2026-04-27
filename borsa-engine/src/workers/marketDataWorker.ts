@@ -48,7 +48,10 @@ export async function fetchAndIngestDailyData(targetDate: string) {
     // 2. Sıralı İşleme (Senkron Döngü - Rate Limit koruması için asla Promise.all kullanılmaz!)
     for (const stock of activeStocks) {
         try {
-            const url = `https://api.polygon.io/v1/open-close/${stock.symbol}/${targetDate}?adjusted=true&apiKey=${POLYGON_API_KEY}`;
+            // Hedefimiz 1 günlük değil, hesaplamaların taze kalması için son 6 aylık (180 gün) veriyi Topluca (Bulk) çekmektir.
+            const fromDate = new Date(Date.now() - 180 * 86400000).toISOString().split('T')[0];
+            const toDate = targetDate;
+            const url = `https://api.polygon.io/v2/aggs/ticker/${stock.symbol}/range/1/day/${fromDate}/${toDate}?adjusted=true&sort=asc&apiKey=${POLYGON_API_KEY}`;
 
             const response = await fetch(url);
 
@@ -56,40 +59,40 @@ export async function fetchAndIngestDailyData(targetDate: string) {
                 console.warn(`[ETL PIPELINE] Rate limit hit for ${stock.symbol}. Forcing extended sleep...`);
                 await sleep(15000); // Ekstra bekleme cezası
                 failCount++;
-                continue; // Bu hisseyi atla, yarın tekrar dener (veya retry mekanizması eklenebilir)
+                continue; // Bu hisseyi atla, yarın tekrar dener
             }
 
             if (!response.ok) {
-                console.log(`[ETL PIPELINE] No data for ${stock.symbol} on ${targetDate} (Market closed or invalid symbol).`);
-                failCount++;
-                // Ücretsiz paket dakikada 5 istek = İstek başı 12 saniye bekleme zorunluluğu
-                await sleep(12500);
-                continue;
-            }
-
-            const data = (await response.json()) as PolygonResponse;
-
-            // QA/QC: Veri Bütünlüğü Doğrulaması (Data Integrity Check)
-            // Hatalı sıfır veya negatif fiyat varsa veritabanını zehirleme, doğrudan reddet.
-            if (data.open <= 0 || data.close <= 0 || data.high <= 0 || data.low <= 0 || data.volume < 0) {
-                console.error(`[ETL PIPELINE] Data integrity failure for ${stock.symbol}. Corrupted values detected.`);
+                console.log(`[ETL PIPELINE] Hata: Polygon'dan ${stock.symbol} verisi çekilemedi (Yanıt Kodu: ${response.status}).`);
                 failCount++;
                 await sleep(12500);
                 continue;
             }
 
-            // 3. Drizzle ORM ile Atomic UPSERT İşlemi
+            const data = await response.json();
+
+            if (!data.results || data.results.length === 0) {
+                console.warn(`[ETL PIPELINE] ${stock.symbol} için boş sonuç döndü. API'de problem olabilir.`);
+                failCount++;
+                await sleep(12500);
+                continue;
+            }
+
+            // Toplu okunan 180 günlük verinin DB'ye Bulk UPSERT için hazırlanması
+            const bulkData = data.results.map((r: any) => ({
+                symbol: stock.symbol,
+                date: new Date(r.t).toISOString().split('T')[0],
+                open: r.o.toString(),
+                high: r.h.toString(),
+                low: r.l.toString(),
+                close: r.c.toString(),
+                adjClose: r.c.toString(), // v2/aggs adjusted=true ise fiyat zaten bölünmüş/düzeltilmiştir
+                volume: r.v
+            }));
+
+            // 3. Drizzle ORM ile Bulk Atomic UPSERT İşlemi
             await db.insert(dailyOhlcv)
-                .values({
-                    symbol: data.symbol,
-                    date: targetDate,
-                    open: data.open.toString(),   // Numeric tipler string olarak geçilebilir
-                    high: data.high.toString(),
-                    low: data.low.toString(),
-                    close: data.close.toString(),
-                    adjClose: data.close.toString(), // Polygon 'adjusted=true' parametresiyle doğrudan düzeltilmiş veri yollar
-                    volume: data.volume
-                })
+                .values(bulkData)
                 .onConflictDoUpdate({
                     target: [dailyOhlcv.symbol, dailyOhlcv.date],
                     set: {
@@ -102,7 +105,7 @@ export async function fetchAndIngestDailyData(targetDate: string) {
                     }
                 });
 
-            console.log(`[ETL PIPELINE] ✅ Successfully ingested ${stock.symbol}`);
+            console.log(`[ETL PIPELINE] ✅ Successfully ingested ${bulkData.length} records for ${stock.symbol}`);
             successCount++;
 
             // Polygon Ücretsiz Paket Kısıtlaması: 5 requests/minute = 1 request per 12 seconds.

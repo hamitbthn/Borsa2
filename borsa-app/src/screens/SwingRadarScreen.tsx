@@ -4,10 +4,13 @@ import { SwingAnalysisResult } from '../models/SwingAnalysisResult';
 import { StockDetailCard } from '../components/StockDetailCard';
 import { createClient } from '@supabase/supabase-js';
 
-// SUPABASE CONFIG (Expo'da PUBLIC enviroment variable'ları EXPO_PUBLIC_ ile başlar)
-// NOT: URL formatı (https://...supabase.co) zorunludur, aksi halde JS Engine uygulamayı direkt çökerterek kapatır.
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://degistirmen-gereken-adres.supabase.co';
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'degistirmen_gereken_anon_key';
+// URL Polyfill Supabase'in Android JS Core motorunda düzgün çalışması için şarttır
+import 'react-native-url-polyfill/auto';
+
+// SUPABASE CONFIG
+// BUNDLER BYPASS: Metro cache hatasından kaçınmak için şifreler doğrudan gömüldü (Zaten Public erişimli anahtarlardır)
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://cvksndzzgedohrcfmyrn.supabase.co';
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_79hClGnOkDX5OO5j0BUK3Q_ozU98bzu';
 
 let supabase: any;
 try {
