@@ -21,7 +21,8 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.redkid255.Borsa"
     },
     "web": {
       "favicon": "./assets/favicon.png"
