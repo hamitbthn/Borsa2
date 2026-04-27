@@ -129,9 +129,12 @@ async function runDailyProcess() {
     }
 }
 
-// HER GECE 03:00'TE ÇALIŞTIR (TSİ)
-cron.schedule('0 3 * * *', () => {
-    runDailyProcess();
+// GitHub Actions zaten kendi Cron zamanlayıcısına sahip olduğu için iç içe zamanlayıcı KULLANILMIYOR.
+// Doğrudan motoru ateşle ve bitince işlemi sonlandır ki Github Actions görevi sonlandırsın.
+runDailyProcess().then(() => {
+    console.log("[SYSTEM] 🛡️ Analiz tamamlandı, GitHub Actions kapatılıyor.");
+    process.exit(0);
+}).catch(err => {
+    console.error("[SYSTEM] ❌ Ölümcül hata:", err);
+    process.exit(1);
 });
-
-console.log("[SYSTEM] 🛡️ Akıllı Borsa Asistanı Orchestrator is running and waiting for the 03:00 signal.");
