@@ -22,6 +22,13 @@ jobs:
           cd borsa-engine
           npm install
 
+      - name: Drizzle ORM Push (Database Migration)
+        run: |
+          cd borsa-engine
+          npm run db:push
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
       - name: Run Analysis Engine
         run: |
           cd borsa-engine
