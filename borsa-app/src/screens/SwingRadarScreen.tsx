@@ -5,9 +5,16 @@ import { StockDetailCard } from '../components/StockDetailCard';
 import { createClient } from '@supabase/supabase-js';
 
 // SUPABASE CONFIG (Expo'da PUBLIC enviroment variable'ları EXPO_PUBLIC_ ile başlar)
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'YOUR_SUPABASE_URL';
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY';
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// NOT: URL formatı (https://...supabase.co) zorunludur, aksi halde JS Engine uygulamayı direkt çökerterek kapatır.
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://degistirmen-gereken-adres.supabase.co';
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'degistirmen_gereken_anon_key';
+
+let supabase: any;
+try {
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} catch (err) {
+    console.log("Supabase kurulumu atlandı.");
+}
 
 export const SwingRadarScreen = () => {
     // Sinyal verisi artık Supabase DB formatında (JSON Row olarak) gelecek 
