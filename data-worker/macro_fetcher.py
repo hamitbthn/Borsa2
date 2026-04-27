@@ -1,58 +1,48 @@
+import os
 import requests
 import datetime
-import os
-from sqlalchemy import create_engine
-import pandas as pd
+from sqlalchemy import create_engine, text
 
-engine = create_engine("sqlite:///local_market_data.db")
+# Supabase Veritabanı
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/borsadb")
+engine = create_engine(DATABASE_URL)
 
-# TCMB Başvuru Anahtarı ve Base URL
-EVDS_API_KEY = os.getenv("EVDS_API_KEY", "DEMO_KEY")
-EVDS_BASE_URL = "https://evds2.tcmb.gov.tr/service/evds/"
-
-def fetch_bist_macro():
-    """
-    TCMB EVDS kullanılarak Makro Veriler (Enflasyon, Politika Faizi, Dolar Kuru) çekilir.
-    Motorun "büyüme > enflasyon" kıyaslamasında kullanılır.
-    """
-    print("🇹🇷 TCMB EVDS'den Makro Veriler Çekiliyor...")
-    headers = {"key": EVDS_API_KEY}
-    
-    end_date = datetime.date.today()
-    start_date = end_date - datetime.timedelta(days=365*2)
-    
-    start_str = start_date.strftime("%d-%m-%Y")
-    end_str = end_date.strftime("%d-%m-%Y")
-    
-    # TÜFE Serisi
-    url = f"{EVDS_BASE_URL}series=TP.FG.J0&startDate={start_str}&endDate={end_str}&type=json"
-    
+def upsert_macro_postgres(indicator_symbol, date_val, rate):
     try:
-        res = requests.get(url, headers=headers)
-        if res.status_code == 200:
-            print("✅ TCMB Enflasyon Verisi (TÜFE) Başarıyla Alındı.")
-            # db.save("macro_bist", res.json())
-        else:
-            print(f"⚠️ TCMB Bağlantı Hatası: {res.status_code}")
+        with engine.begin() as conn:
+            # macro_data tablosu eğer yoksa sistemin başında otonom açılır!
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS macro_data (
+                    id SERIAL PRIMARY KEY,
+                    indicator VARCHAR(50) NOT NULL,
+                    value NUMERIC(10,4) NOT NULL,
+                    entry_date DATE NOT NULL,
+                    UNIQUE(indicator, entry_date)
+                );
+            """))
+            # SADECE ON CONFLICT UPSERT MANTIĞI:
+            conn.execute(text(f"""
+                INSERT INTO macro_data (indicator, value, entry_date)
+                VALUES ('{indicator_symbol}', {rate}, '{date_val}')
+                ON CONFLICT (indicator, entry_date) DO UPDATE SET value = EXCLUDED.value;
+            """))
+            print(f"✅ Hayalet Makro Veri Yazıldı: {indicator_symbol} -> {rate} ({date_val})")
     except Exception as e:
-        print(f"❌ TCMB Veri Çekimi Hatalı: {e}")
+        print(f"⚠️ Makro veri yazma rotası çöktü: {e}")
 
 FRED_API_KEY = os.getenv("FRED_API_KEY", "DEMO_KEY")
 
 def fetch_us_macro():
-    """
-    FRED API ile ABD Piyasaları için Federal Reserve Enflasyon (CPI) ve Faiz (FEDFUNDS) çekimi.
-    """
     print("🇺🇸 FRED üzerinden ABD Makro Verileri Çekiliyor...")
     try:
-        # ABD Tüketici Fiyat Endeksi
         cpi_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL&api_key={FRED_API_KEY}&file_type=json"
         res = requests.get(cpi_url)
         if res.status_code == 200:
-            print("✅ FRED CPI (Enflasyon) Başarıyla Alındı.")
+            data = res.json()['observations'][-1]
+            upsert_macro_postgres('USA_INFLATION', data['date'], float(data['value']))
+            print("✅ FRED CPI (Enflasyon) Başarıyla Alındı ve Yazıldı.")
     except Exception as e:
          print(f"❌ FRED Veri Çekimi Hatalı: {e}")
 
 if __name__ == "__main__":
-    fetch_bist_macro()
     fetch_us_macro()
