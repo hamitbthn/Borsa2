@@ -2,7 +2,8 @@ name: Daily Stock Analysis Engine
 
 on:
   schedule:
-    - cron: '0 0 * * *'
+    # TSİ 16:35'e denk gelmesi için UTC saatiyle 13:35 olarak ayarlandı (Yaz/Kış durumuna göre UTC+3)
+    - cron: '35 13 * * *'
   workflow_dispatch:
 
 jobs:
